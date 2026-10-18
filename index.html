@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c101b">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>PF Admin Center</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0c101b;--panel:#151a28;--edge:#2c3449;--text:#f4f6fb;--muted:#a3aec4;--pink:#ef286c;--green:#42d69d;--warn:#ffbd69; font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 78% -15%,#38203355,transparent 58%),var(--bg);color:var(--text)}
+    button,input{font:inherit}button{cursor:pointer;border:0;border-radius:11px;background:var(--pink);color:white;font-weight:700;padding:10px 13px;transition:filter .15s}button:hover{filter:brightness(1.14)}button:disabled{cursor:default;opacity:.38}button.secondary{background:#343d52}button.danger{background:#94344b}button.good{background:#1b7958}button.outline{background:transparent;border:1px solid #667086}
+    .page{max-width:1080px;margin:0 auto;padding:16px 16px 40px}header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0 17px;border-bottom:1px solid var(--edge)}
+    .brand{display:flex;align-items:baseline;gap:7px;font-weight:900;font-size:23px;letter-spacing:-.9px}.brand em{color:#ff3477;font-style:normal}.brand small{font-size:10px;letter-spacing:1.3px;color:#ff9abb}
+    .panel{background:var(--panel);border:1px solid var(--edge);border-radius:17px;padding:18px;margin-top:18px;box-shadow:0 9px 32px #0000001f}
+    h1{font-size:23px;line-height:1.2;margin:0 0 9px}h2{font-size:16px;margin:0}p{margin:7px 0 15px;color:var(--muted)}.muted{color:var(--muted);font-size:13px}
+    .login{text-align:center;max-width:510px;margin:70px auto 0;padding:30px 22px}.login .symbol{font-size:49px;font-weight:950;font-style:italic;letter-spacing:-7px;color:#ff3a7c;text-shadow:0 0 16px #ec30778a}
+    .login button{margin-top:9px;width:min(100%,300px);display:inline-flex;justify-content:center;align-items:center;gap:9px}.google{display:inline-grid;place-items:center;background:white;color:#4285f4;width:23px;height:23px;border-radius:50%;font-weight:800}
+    .toolbar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}.search{display:flex;gap:8px;align-items:center;margin-top:12px}.search input{flex:1;min-width:0}
+    input{padding:11px 13px;color:var(--text);background:#0f1522;border:1px solid #4b5468;border-radius:11px;outline-offset:3px}input:focus{border-color:#ed4581}
+    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:12px;margin-top:16px}
+    .user{background:#101726;border:1px solid #2b344a;border-radius:13px;padding:14px}.who{display:flex;align-items:center;gap:10px}.avatar{flex:0 0 39px;display:grid;place-items:center;width:39px;height:39px;background:#465069;border-radius:50%;font-weight:800}.id{min-width:0}.email{font-weight:750;overflow-wrap:anywhere}.tags{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.tag{font-size:12px;border:1px solid #4a546a;background:#2e384c;border-radius:7px;padding:3px 7px}.tag.pro{color:white;background:#702044;border-color:#ff4285}.tag.blocked{border-color:#cc6c7e;color:#ff9eae}
+    .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:13px}.actions button{font-size:12px;padding:8px 10px}.line{font-size:12px;color:var(--muted);margin-top:6px}
+    .footnav{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:15px}#notice{white-space:pre-wrap;margin-top:15px;color:var(--warn);font-size:13px}#notice.success{color:var(--green)}footer{text-align:center;margin-top:33px;color:#818da6;font-size:12px}
+    .notice{font-size:13px;border:1px solid #765774;background:#2e2237;border-radius:9px;padding:10px;color:#f6c4db}.mini{font-size:12px;margin-bottom:0}
+    [hidden]{display:none!important}
+    @media(max-width:560px){.page{padding:12px 12px 35px}.login{margin:40px auto 0}.toolbar{align-items:flex-start}.cards{grid-template-columns:1fr}.search{flex-wrap:wrap}.search input{flex-basis:100%}.search button{flex:1}}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="brand"><span>PF <em>STUDIO</em></span><small>ADMIN</small></div>
+      <button id="logout" class="secondary" hidden>Đăng xuất</button>
+    </header>
+    <section id="loginPanel" class="panel login">
+      <div class="symbol" aria-hidden="true">PF</div>
+      <h1>PF Admin Center</h1>
+      <p>Đăng nhập bằng Google để quản lý khách hàng, tài khoản và quyền PF Pro. Chỉ tài khoản được cấp quyền Admin mới truy cập dữ liệu.</p>
+      <button id="login"><span class="google" aria-hidden="true">G</span> Tiếp tục với Google</button>
+      <p class="mini">Không lưu mật khẩu Google. Không yêu cầu quyền truy cập Gmail.</p>
+    </section>
+    <main id="app" hidden>
+      <section class="panel">
+        <div class="toolbar">
+          <div><h1>Quản lý người dùng</h1><div id="signedInAs" class="muted"></div></div>
+          <button id="refresh" class="secondary">Làm mới</button>
+        </div>
+        <div class="notice" style="margin-top:16px">Các thao tác cấp, gia hạn, thu hồi Pro và khóa tài khoản đều được xác thực trên máy chủ và ghi vào nhật ký quản trị.</div>
+        <div class="search">
+          <input id="query" placeholder="Tìm email Google hoặc tên người dùng" autocomplete="off" aria-label="Tìm tài khoản">
+          <button id="search">Tìm kiếm</button>
+        </div>
+        <div id="users" class="cards" aria-live="polite"></div>
+        <div class="footnav">
+          <span class="muted" id="paging">Chưa tải dữ liệu</span>
+          <div><button id="prev" class="secondary" disabled>Trước</button> <button id="next" class="secondary" disabled>Tiếp</button></div>
+        </div>
+      </section>
+    </main>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <footer>PF Studio • Google Sign-In • Quyền Admin được kiểm tra trên Supabase</footer>
+  </div>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
+    // Public project configuration only. Never put service_role or Google Client Secret here.
+    const URL = 'https://xrxjwulrpfimpccjejbe.supabase.co';
+    const PUBLISHABLE_KEY = 'sb_publishable_J_RxUjYI3UNQyxDg8Sp3CA_CPFbvkEl';
+    const sb = createClient(URL, PUBLISHABLE_KEY, {
+      auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    });
+    const $ = (id) => document.getElementById(id);
+    const el = (tag, className, value) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (value !== undefined) node.textContent = String(value);
+      return node;
+    };
+    const setNotice = (message, success = false) => {
+      $('notice').textContent = message;
+      $('notice').classList.toggle('success', success);
+    };
+    let offset = 0;
+    const pageSize = 25;
+    const timezoneDate = (timestamp) => timestamp
+      ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(timestamp))
+      : 'Chưa có';
+    async function api(payload) {
+      const { data, error } = await sb.functions.invoke('pf-admin', { body: payload });
+      if (error) throw new Error('Không kết nối được API quản trị hoặc phiên đăng nhập không hợp lệ.');
+      if (!data?.ok) throw new Error(data?.error || 'Máy chủ không xử lý được yêu cầu.');
+      return data.data;
+    }
+    function actionButton(title, cls, fn) {
+      const b = el('button', cls, title);
+      b.addEventListener('click', fn);
+      return b;
+    }
+    function rowFor(user) {
+      const card = el('article', 'user');
+      const head = el('div', 'who');
+      head.append(el('div', 'avatar', (user.display_name || user.google_email || '?').slice(0, 1).toUpperCase()));
+      const identity = el('div', 'id');
+      identity.append(el('div', 'email', user.google_email || 'Không có email'));
+      identity.append(el('div', 'muted', user.display_name || 'Chưa đặt tên'));
+      head.append(identity);
+      card.append(head);
+      const tags = el('div', 'tags');
+      tags.append(el('span', user.pro_active ? 'tag pro' : 'tag', user.pro_active ? 'PF PRO' : 'PF Free'));
+      tags.append(el('span', user.account_status === 'suspended' ? 'tag blocked' : 'tag', user.account_status === 'suspended' ? 'Đã khóa' : 'Hoạt động'));
+      card.append(tags);
+      card.append(el('div', 'line', `Hết hạn Pro: ${timezoneDate(user.pro_expires_at)} · Đơn đã trả: ${user.paid_orders_count || 0}`));
+      const acts = el('div', 'actions');
+      async function change(action, params, promptText) {
+        if (!confirm(promptText)) return;
+        const reason = prompt('Nhập lý do để lưu vào nhật ký Admin:');
+        if (!reason?.trim()) return;
+        try {
+          setNotice('Đang thực hiện...');
+          await api({ action, user_id: user.user_id, ...params, reason: reason.trim() });
+          await refresh();
+          setNotice('Cập nhật thành công và đã lưu lịch sử quản trị.', true);
+        } catch (err) { setNotice(err.message); }
+      }
+      acts.append(
+        actionButton('Cấp Pro 30 ngày', 'good', () => change('change_pro', { mode: 'grant', days: 30 }, `Cấp Pro 30 ngày mới cho ${user.google_email}?`)),
+        actionButton('+30 ngày', 'secondary', () => change('change_pro', { mode: 'extend', days: 30 }, `Gia hạn thêm 30 ngày cho ${user.google_email}?`)),
+        actionButton('Thu hồi Pro', 'danger', () => change('change_pro', { mode: 'revoke' }, `Thu hồi Pro của ${user.google_email}?`)),
+        actionButton(user.account_status === 'suspended' ? 'Mở khóa' : 'Khóa tài khoản', 'outline', () => change('set_access', {
+          status: user.account_status === 'suspended' ? 'active' : 'suspended'
+        }, `${user.account_status === 'suspended' ? 'Mở' : 'Khóa'} tài khoản ${user.google_email}?`))
+      );
+      card.append(acts);
+      return card;
+    }
+    async function refresh() {
+      $('refresh').disabled = true;
+      setNotice('Đang tải danh sách tài khoản...');
+      try {
+        const rows = await api({ action: 'list_users', query: $('query').value.trim(), limit: pageSize, offset });
+        const users = Array.isArray(rows) ? rows : [];
+        $('users').replaceChildren(...users.map(rowFor));
+        $('paging').textContent = `${offset + 1} đến ${offset + users.length} · ${users.length} tài khoản trên trang`;
+        $('prev').disabled = offset === 0;
+        $('next').disabled = users.length < pageSize;
+        setNotice(users.length ? 'Đã tải danh sách.' : 'Chưa có tài khoản phù hợp.', true);
+      } catch (err) {
+        $('users').replaceChildren();
+        $('next').disabled = true;
+        setNotice(`Chưa thể tải dữ liệu. Tài khoản Google này có thể chưa được cấp quyền Admin. ${err.message}`);
+      } finally { $('refresh').disabled = false; }
+    }
+    $('login').addEventListener('click', async () => {
+      setNotice('Đang chuyển đến Google...');
+      const redirectTo = window.location.origin + window.location.pathname;
+      const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+      if (error) setNotice('Không bắt đầu được đăng nhập Google: ' + error.message);
+    });
+    $('logout').addEventListener('click', async () => {
+      await sb.auth.signOut();
+      window.location.replace(window.location.pathname);
+    });
+    $('refresh').addEventListener('click', refresh);
+    $('search').addEventListener('click', () => { offset = 0; refresh(); });
+    $('query').addEventListener('keydown', e => { if (e.key === 'Enter') { offset = 0; refresh(); } });
+    $('prev').addEventListener('click', () => { offset = Math.max(0, offset - pageSize); refresh(); });
+    $('next').addEventListener('click', () => { offset += pageSize; refresh(); });
+    try {
+      const { data: { session }, error } = await sb.auth.getSession();
+      if (error) throw error;
+      if (session) {
+        $('loginPanel').hidden = true;
+        $('app').hidden = false;
+        $('logout').hidden = false;
+        $('signedInAs').textContent = `Đang đăng nhập: ${session.user.email || 'Google'}`;
+        await refresh();
+      }
+    } catch (err) { setNotice('Lỗi xác thực: ' + err.message); }
+  </script>
+</body>
+</html>
