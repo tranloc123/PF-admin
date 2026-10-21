@@ -31,6 +31,7 @@
   <div class="page">
     <header>
       <div class="brand"><span>PF <em>STUDIO</em></span><small>ADMIN</small></div>
+      <button id="openRecovery" class="secondary" hidden>Giao dịch lỗi</button>
       <button id="logout" class="secondary" hidden>Đăng xuất</button>
     </header>
     <section id="loginPanel" class="panel login">
@@ -156,6 +157,7 @@
       const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
       if (error) setNotice('Không bắt đầu được đăng nhập Google: ' + error.message);
     });
+    $('openRecovery').addEventListener('click', () => { window.location.assign('recovery.html'); });
     $('logout').addEventListener('click', async () => {
       await sb.auth.signOut();
       window.location.replace(window.location.pathname);
@@ -172,6 +174,7 @@
         $('loginPanel').hidden = true;
         $('app').hidden = false;
         $('logout').hidden = false;
+        $('openRecovery').hidden = false;
         $('signedInAs').textContent = `Đang đăng nhập: ${session.user.email || 'Google'}`;
         await refresh();
       }
