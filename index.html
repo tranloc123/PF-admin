@@ -25,13 +25,30 @@
     .notice{font-size:13px;border:1px solid #765774;background:#2e2237;border-radius:9px;padding:10px;color:#f6c4db}.mini{font-size:12px;margin-bottom:0}
     [hidden]{display:none!important}
     @media(max-width:560px){.page{padding:12px 12px 35px}.login{margin:40px auto 0}.toolbar{align-items:flex-start}.cards{grid-template-columns:1fr}.search{flex-wrap:wrap}.search input{flex-basis:100%}.search button{flex:1}}
+
+    /* Unified PF Admin Center: two views on one public URL */
+    .admin-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:19px}
+    .admin-tabs button{border:1px solid #3e4a63;background:#222b3e;color:#bfcbe0;text-align:center;min-height:45px}
+    .admin-tabs button[aria-selected="true"]{background:#ef286c;color:white;border-color:#ef286c}
+    .r-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin-top:15px}
+    .r-stat{background:#242f45;padding:13px;border-radius:11px}.r-stat span{display:block;font-size:12px;color:#c3ccdd}.r-stat strong{font-size:25px}
+    .r-cases{display:grid;gap:12px}.r-case{background:#101726;border:1px solid #34435a;padding:15px;border-radius:12px}
+    .r-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+    .r-head strong{overflow-wrap:anywhere}.r-pill{background:#35425a;border-radius:6px;padding:4px 8px;font-size:12px}
+    .r-meta{white-space:pre-wrap;font-size:13px;color:#b5c1d6;margin:10px 0;overflow-wrap:anywhere}
+    .r-fields{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:10px 0}
+    .r-fields input,.r-fields select,.r-case textarea{width:100%;min-width:0;background:#0d1522;color:#f4f6fb;border:1px solid #4b5468;border-radius:9px;padding:10px;font:inherit}
+    .r-case textarea{min-height:72px;resize:vertical;margin-bottom:9px}
+    .r-audit{border-top:1px solid #35435b;font-size:13px;color:#bbc6d8;padding:9px 0;overflow-wrap:anywhere}
+    #recNotice{white-space:pre-wrap;color:#ffbd69;font-size:13px;margin:14px 0}
+    #recNotice.success{color:#42d69d}
+    @media(max-width:560px){.admin-tabs button{font-size:13px;padding:11px 6px}.r-fields{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <div class="page">
     <header>
       <div class="brand"><span>PF <em>STUDIO</em></span><small>ADMIN</small></div>
-      <button id="openRecovery" class="secondary" hidden>Giao dịch lỗi</button>
       <button id="logout" class="secondary" hidden>Đăng xuất</button>
     </header>
     <section id="loginPanel" class="panel login">
@@ -42,7 +59,11 @@
       <p class="mini">Không lưu mật khẩu Google. Không yêu cầu quyền truy cập Gmail.</p>
     </section>
     <main id="app" hidden>
-      <section class="panel">
+      <nav class="admin-tabs" aria-label="Các mục quản trị">
+        <button id="tabUsers" type="button" aria-selected="true">Người dùng &amp; PF Pro</button>
+        <button id="tabRecovery" type="button" aria-selected="false">Đối soát SePay</button>
+      </nav>
+      <section class="panel" id="userSection">
         <div class="toolbar">
           <div><h1>Quản lý người dùng</h1><div id="signedInAs" class="muted"></div></div>
           <button id="refresh" class="secondary">Làm mới</button>
@@ -57,6 +78,23 @@
           <span class="muted" id="paging">Chưa tải dữ liệu</span>
           <div><button id="prev" class="secondary" disabled>Trước</button> <button id="next" class="secondary" disabled>Tiếp</button></div>
         </div>
+      </section>
+
+      <section id="recoverySection" hidden aria-label="Đối soát giao dịch SePay">
+        <section class="panel">
+          <div class="toolbar">
+            <div><h1>Đối soát SePay</h1><div class="muted" id="recWho"></div></div>
+            <div class="actions">
+              <button type="button" id="recRefresh" class="secondary">Làm mới</button>
+              <button type="button" id="recSync" disabled>Đồng bộ hồ sơ lỗi</button>
+            </div>
+          </div>
+          <p>Hồ sơ giao dịch bất thường và nhật ký xử lý. Không tự chuyển tiền, hoàn tiền hay cấp PF Pro.</p>
+          <div id="recNotice" role="status" aria-live="polite">Chọn tab để tải dữ liệu đối soát.</div>
+          <div id="recStats" class="r-stats"></div>
+        </section>
+        <section class="panel"><h2>Hồ sơ cần đối soát</h2><div id="recCases" class="r-cases"></div></section>
+        <section class="panel"><h2>Nhật ký xử lý</h2><div id="recAudit"></div></section>
       </section>
     </main>
     <div id="notice" role="status" aria-live="polite"></div>
@@ -157,7 +195,180 @@
       const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
       if (error) setNotice('Không bắt đầu được đăng nhập Google: ' + error.message);
     });
-    $('openRecovery').addEventListener('click', () => { window.location.assign('recovery.html'); });
+
+    // Recovery uses the SAME Supabase client, Google session and URL as the existing Admin Center.
+    let recBusy = false;
+    let recGranted = false;
+    let recLoaded = false;
+    const recShow = (message, ok = false) => {
+      $('recNotice').textContent = message;
+      $('recNotice').classList.toggle('success', ok);
+    };
+    const recFormatDate = value => {
+      if (!value) return 'Chưa có';
+      const d = new Date(value);
+      return Number.isNaN(d.valueOf()) ? 'Không hợp lệ' :
+        new Intl.DateTimeFormat('vi-VN', {
+          dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh'
+        }).format(d);
+    };
+    const recFormatMoney = value => Number.isFinite(Number(value))
+      ? Number(value).toLocaleString('vi-VN') + 'đ' : 'Không rõ';
+    async function recApi(payload) {
+      const { data, error } = await sb.functions.invoke('pf-recovery-admin', { body: payload });
+      if (!error && data?.ok === true) return data.data;
+      let code = data?.error;
+      if (error?.context?.json) {
+        try { code = (await error.context.json())?.error || code; } catch {}
+      }
+      if (code === 'admin_access_denied') {
+        recGranted = false;
+        throw Error('Tài khoản Google này chưa được cấp quyền Admin. Không thể đọc hoặc thay đổi dữ liệu.');
+      }
+      if (code === 'login_required' || code === 'google_login_required') {
+        recGranted = false;
+        throw Error('Phiên Google đã hết hạn. Hãy đăng xuất và đăng nhập lại tại đây.');
+      }
+      throw Error(code || 'Không tải được dữ liệu đối soát. Vui lòng kiểm tra kết nối hoặc quyền quản trị.');
+    }
+    const recChoices = {
+      open: [['investigating','Đang kiểm tra'], ['needs_refund','Cần xử lý hoàn tiền'], ['resolved_manual','Giải quyết thủ công']],
+      investigating: [['needs_refund','Cần xử lý hoàn tiền'], ['resolved_manual','Giải quyết thủ công']],
+      needs_refund: [['refund_confirmed','Đã xác nhận hoàn tiền'], ['resolved_manual','Giải quyết thủ công']]
+    };
+    function recCaseCard(c) {
+      const card = el('article','r-case');
+      const head = el('div','r-head');
+      head.append(el('strong','',c.provider_event_id || 'Không có mã'),el('span','r-pill',c.state || 'Không rõ'));
+      card.append(head);
+      const details = [
+        'Kết quả: ' + (c.initial_outcome || 'Chưa rõ'),
+        'Số tiền: ' + recFormatMoney(c.amount_vnd) + ' · Ngân hàng: ' + (c.gateway || 'Không rõ'),
+        'Mã PFPRO: ' + (c.payment_code || 'Không có'),
+        'Ngày: ' + recFormatDate(c.created_at)
+      ];
+      card.append(el('div','r-meta',details.join('\n')));
+      if (c.last_note) card.append(el('div','r-meta','Ghi chú trước: ' + c.last_note));
+      if (!recChoices[c.state]) {
+        card.append(el('p','muted','Hồ sơ kết thúc, chỉ đọc.'));
+        return card;
+      }
+      const fields = el('div','r-fields'), state = el('select'), evidence = el('input'), note = el('textarea');
+      state.setAttribute('aria-label','Tình trạng xử lý hồ sơ');
+      for (const [value,label] of recChoices[c.state]) {
+        const option = el('option','',label);
+        option.value = value;
+        state.append(option);
+      }
+      evidence.placeholder = 'Mã chứng từ ngân hàng (nếu có)';
+      evidence.maxLength = 120;
+      note.placeholder = 'Ghi chú xác minh, tối thiểu 10 ký tự';
+      note.maxLength = 500;
+      fields.append(state,evidence);
+      card.append(fields,note);
+      const save = el('button','good','Lưu quyết định');
+      save.type = 'button';
+      card.append(save);
+      save.addEventListener('click', async () => {
+        if (recBusy || !recGranted) return;
+        const noteValue = note.value.trim(), ev = evidence.value.trim();
+        if (noteValue.length < 10) return recShow('Ghi chú phải có tối thiểu 10 ký tự.');
+        if (state.value === 'refund_confirmed' && ev.length < 6)
+          return recShow('Xác nhận hoàn tiền cần mã chứng từ ngân hàng thực tế.');
+        if (!confirm('Cập nhật hồ sơ ' + String(c.provider_event_id) + '? Không chuyển tiền hoặc cấp Pro.')) return;
+        recBusy = true;
+        save.disabled = true;
+        $('recRefresh').disabled = true;
+        $('recSync').disabled = true;
+        let succeeded = false;
+        try {
+          await recApi({action:'review',event_id:String(c.provider_event_id),state:state.value,note:noteValue,evidence:ev || null});
+          succeeded = true;
+        } catch (err) { recShow(err.message); }
+        finally { recBusy = false; save.disabled = false; $('recRefresh').disabled = false; $('recSync').disabled = !recGranted; }
+        if (succeeded) {
+          await recLoad();
+          if (recLoaded) recShow('Đã lưu quyết định và ghi nhật ký đối soát.',true);
+        }
+      });
+      return card;
+    }
+    async function recLoad() {
+      if (recBusy) return;
+      recBusy = true;
+      $('recRefresh').disabled = true;
+      $('recSync').disabled = true;
+      recShow('Đang tải dữ liệu SePay từ Supabase...');
+      try {
+        const result = await recApi({action:'list',limit:25});
+        recGranted = true;
+        recLoaded = true;
+        const totals = result?.totals || {}, stats = $('recStats');
+        stats.replaceChildren();
+        for (const [label,key] of [
+          ['Mới','open'],['Đang kiểm tra','investigating'],['Chờ hoàn tiền','needs_refund'],
+          ['Đã giải quyết','resolved_manual'],['Đã xác nhận hoàn tiền','refund_confirmed'],['Tổng','total']
+        ]) {
+          const tile = el('div','r-stat');
+          tile.append(el('span','',label),el('strong','',totals[key] ?? 0));
+          stats.append(tile);
+        }
+        const cases = $('recCases');
+        cases.replaceChildren();
+        const rows = Array.isArray(result?.cases) ? result.cases : [];
+        if (!rows.length) cases.append(el('p','muted','Chưa có giao dịch lỗi cần đối soát.'));
+        for (const c of rows) cases.append(recCaseCard(c));
+        const audit = $('recAudit');
+        audit.replaceChildren();
+        const recent = Array.isArray(result?.recent_audit) ? result.recent_audit : [];
+        if (!recent.length) audit.append(el('p','muted','Chưa có nhật ký xử lý.'));
+        for (const a of recent) audit.append(el('div','r-audit',
+          recFormatDate(a.created_at) + ' · ' + (a.provider_event_id || '') +
+          ' · ' + (a.old_state || '') + ' → ' + (a.new_state || '') + ' · ' + (a.note || '')));
+        recShow('Đã tải dữ liệu từ Supabase.', true);
+      } catch (err) {
+        recGranted = false;
+        recLoaded = false;
+        $('recStats').replaceChildren();
+        $('recCases').replaceChildren();
+        $('recAudit').replaceChildren();
+        recShow(err.message);
+      } finally {
+        recBusy = false;
+        $('recRefresh').disabled = false;
+        $('recSync').disabled = !recGranted;
+      }
+    }
+    function openAdminTab(name) {
+      const recovery = name === 'recovery';
+      $('userSection').hidden = recovery;
+      $('recoverySection').hidden = !recovery;
+      $('tabUsers').setAttribute('aria-selected',String(!recovery));
+      $('tabRecovery').setAttribute('aria-selected',String(recovery));
+      if (recovery && !recLoaded) recLoad();
+    }
+    $('tabUsers').addEventListener('click', () => openAdminTab('users'));
+    $('tabRecovery').addEventListener('click', () => openAdminTab('recovery'));
+    $('recRefresh').addEventListener('click', recLoad);
+    $('recSync').addEventListener('click', async () => {
+      if (recBusy || !recGranted) return;
+      if (!confirm('Đồng bộ hồ sơ giao dịch lỗi hiện có? Không chuyển tiền, hoàn tiền hoặc cấp Pro.')) return;
+      recBusy = true;
+      $('recSync').disabled = true;
+      $('recRefresh').disabled = true;
+      let succeeded = false, imported = 0;
+      try {
+        const data = await recApi({action:'sync'});
+        imported = data?.imported ?? 0;
+        succeeded = true;
+      } catch (err) { recShow(err.message); }
+      finally { recBusy = false; $('recRefresh').disabled = false; $('recSync').disabled = !recGranted; }
+      if (succeeded) {
+        await recLoad();
+        if (recLoaded) recShow('Đã đồng bộ ' + imported + ' hồ sơ.',true);
+      }
+    });
+
     $('logout').addEventListener('click', async () => {
       await sb.auth.signOut();
       window.location.replace(window.location.pathname);
@@ -174,9 +385,10 @@
         $('loginPanel').hidden = true;
         $('app').hidden = false;
         $('logout').hidden = false;
-        $('openRecovery').hidden = false;
         $('signedInAs').textContent = `Đang đăng nhập: ${session.user.email || 'Google'}`;
         await refresh();
+        $('recWho').textContent = session.user.email || 'Google Admin';
+        if (window.location.hash === '#recovery') openAdminTab('recovery');
       }
     } catch (err) { setNotice('Lỗi xác thực: ' + err.message); }
   </script>
