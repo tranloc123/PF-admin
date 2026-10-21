@@ -96,7 +96,7 @@ function renderCase(c){
   if(state.value==="refund_confirmed"&&ev.length<6){show("Phải có mã chứng từ ngân hàng thật khi xác nhận đã hoàn tiền.");return;}
   if(!confirm("Xác nhận cập nhật hồ sơ "+String(c.provider_event_id)+"? Không có thao tác chuyển tiền hoặc cấp Pro."))return;
   busy=true;save.disabled=true;
-  try{await invoke({action:"review",event_id:String(c.provider_event_id),state:state.value,note,evidence:ev||null});show("Đã lưu quyết định và ghi vào nhật ký.",true);await load();}
+  try{await invoke({action:"review",event_id:String(c.provider_event_id),state:state.value,note,evidence:ev||null});show("Đã lưu quyết định và ghi vào nhật ký.",true);busy=false;await load();}
   catch(err){show(err.message);}finally{busy=false;save.disabled=false;}
  });
  return card;
