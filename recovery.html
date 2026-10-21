@@ -39,6 +39,7 @@ textarea{resize:vertical;min-height:75px}
 <p>Để sử dụng, đăng nhập tài khoản Google được cấp quyền quản trị tại PF Admin Center. Sau khi đăng nhập, quay về mục “Giao dịch lỗi”.</p>
 <a class="btn" href="./">Đăng nhập Google tại Admin Center</a>
 </section>
+<div id="notice" role="status" aria-live="polite"></div>
 <main id="app" hidden>
 <div class="toolbar"><div><h1>Đối soát SePay Live</h1><div class="muted" id="who"></div></div>
 <div class="actions"><button id="refresh" class="secondary" type="button">Làm mới</button><button id="sync" type="button">Đồng bộ hồ sơ lỗi</button></div></div>
@@ -47,7 +48,6 @@ textarea{resize:vertical;min-height:75px}
 <section class="panel"><h2>Hồ sơ cần đối soát</h2><div id="cases" class="cases"></div></section>
 <section class="panel"><h2>Nhật ký xử lý</h2><div id="audit"></div></section>
 </main>
-<div id="notice" role="status" aria-live="polite"></div>
 <footer class="muted">PF Studio V89 Recovery · Google + Supabase · SePay Live giữ nguyên trạng thái trước khi triển khai</footer>
 </div>
 <script type="module">
@@ -59,6 +59,7 @@ const show=(message,good=false)=>{$("notice").textContent=message;$("notice").cl
 const formatDate=s=>{if(!s)return "Chưa có";const d=new Date(s);return isNaN(d.valueOf())?"Không hợp lệ":new Intl.DateTimeFormat("vi-VN",{dateStyle:"short",timeStyle:"short",timeZone:"Asia/Ho_Chi_Minh"}).format(d);};
 const formatMoney=x=>Number.isFinite(Number(x))?Number(x).toLocaleString("vi-VN")+"đ":"Không rõ";
 let busy=false,granted=false;
+show("Đang kiểm tra phiên Google và quyền quản trị...",false);
 async function invoke(body){
  const {data,error}=await sb.functions.invoke("pf-recovery-admin",{body});
  if(error||data?.ok!==true){
@@ -104,6 +105,7 @@ function renderCase(c){
 async function load(){
  if(busy)return;
  busy=true;$("refresh").disabled=true;$("sync").disabled=true;
+ show("Đang tải dữ liệu đối soát từ Supabase...");
  try{
   const result=await invoke({action:"list",limit:25});
   granted=true;
