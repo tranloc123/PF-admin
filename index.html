@@ -93,6 +93,14 @@
           <div id="recNotice" role="status" aria-live="polite">Chọn tab để tải dữ liệu đối soát.</div>
           <div id="recStats" class="r-stats"></div>
         </section>
+        <section class="panel" id="sepayOverviewSection">
+          <h2>Thanh toán SePay LIVE • Tổng quan</h2>
+          <p class="muted">Đọc trạng thái trực tiếp từ Supabase. Trang này không có nút bật thanh toán hoặc tự cấp Pro.</p>
+          <div class="notice" id="liveGateNote">Chưa tải trạng thái Live.</div>
+          <div class="r-stats" id="liveConfig"></div>
+          <h2 style="margin-top:18px">Đơn PF Pro gần nhất</h2>
+          <div class="r-cases" id="liveOrders" style="margin-top:10px"></div>
+        </section>
         <section class="panel"><h2>Hồ sơ cần đối soát</h2><div id="recCases" class="r-cases"></div></section>
         <section class="panel"><h2>Nhật ký xử lý</h2><div id="recAudit"></div></section>
       </section>
@@ -293,6 +301,47 @@
       });
       return card;
     }
+
+    function recRenderPaymentOverview(result) {
+      const dbOpen = result?.db_gate_enabled === true;
+      const envOpen = result?.env_live_enabled === true;
+      const isReady = dbOpen && envOpen && result?.webhook_hmac_ready === true &&
+        result?.bank_account_ready === true && result?.beneficiary_ready === true;
+      $('liveGateNote').textContent = isReady
+        ? 'Live đang bật trên backend. Chỉ giao dịch xác minh thành công mới được cấp Pro.'
+        : 'Thanh toán Live đang KHÓA hoặc chưa đủ cấu hình. Chưa cho phép chuyển tiền.';
+      const container = $('liveConfig');
+      container.replaceChildren();
+      const cards = [
+        ['Cổng DB', dbOpen?'ĐANG MỞ':'ĐÃ KHÓA'],
+        ['Môi trường', envOpen?'ĐANG MỞ':'ĐÃ KHÓA'],
+        ['HMAC', result?.webhook_hmac_ready?'Đã cấu hình':'Chưa sẵn sàng'],
+        ['MBBank', result?.bank_account_ready && result?.beneficiary_ready?'Đã cấu hình':'Chưa sẵn sàng'],
+        ['Đơn đang chờ', result?.pending_orders ?? 0],
+        ['Đã thanh toán', result?.paid_orders ?? 0],
+        ['Đơn hết hạn', result?.expired_orders ?? 0],
+        ['Biên nhận webhook', result?.received_events ?? 0],
+      ];
+      for (const [label,value] of cards) {
+        const card = el('div','r-stat');
+        card.append(el('span','',label),el('strong','',value));
+        container.append(card);
+      }
+      const out = $('liveOrders');
+      out.replaceChildren();
+      const orders = Array.isArray(result?.recent_orders)?result.recent_orders:[];
+      if (!orders.length) out.append(el('p','muted','Chưa có đơn SePay Live. Đây là trạng thái bình thường khi chưa mở thu tiền.'));
+      for (const order of orders) {
+        const card = el('article','r-case'),head=el('div','r-head');
+        head.append(el('strong','',order.payment_code||'Không có mã'),
+          el('span','r-pill',order.status||'Không rõ'));
+        card.append(head);
+        card.append(el('div','r-meta',
+          recFormatMoney(order.amount_vnd)+' · '+recFormatDate(order.created_at)+
+          (order.paid_at?' · Thanh toán: '+recFormatDate(order.paid_at):'')));
+        out.append(card);
+      }
+    }
     async function recLoad() {
       if (recBusy) return;
       recBusy = true;
@@ -326,6 +375,14 @@
           recFormatDate(a.created_at) + ' · ' + (a.provider_event_id || '') +
           ' · ' + (a.old_state || '') + ' → ' + (a.new_state || '') + ' · ' + (a.note || '')));
         recShow('Đã tải dữ liệu từ Supabase.', true);
+        try {
+          const payment = await recApi({action:'payment_overview'});
+          recRenderPaymentOverview(payment);
+        } catch (err) {
+          $('liveGateNote').textContent='Chưa tải được báo cáo thanh toán: '+err.message;
+          $('liveConfig').replaceChildren();
+          $('liveOrders').replaceChildren();
+        }
       } catch (err) {
         recGranted = false;
         recLoaded = false;
