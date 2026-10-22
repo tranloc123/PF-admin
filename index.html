@@ -26,8 +26,8 @@
     [hidden]{display:none!important}
     @media(max-width:560px){.page{padding:12px 12px 35px}.login{margin:40px auto 0}.toolbar{align-items:flex-start}.cards{grid-template-columns:1fr}.search{flex-wrap:wrap}.search input{flex-basis:100%}.search button{flex:1}}
 
-    /* PF Admin Center: three views on one URL */
-    .admin-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:19px}
+    /* PF Admin Center: four views on one URL */
+    .admin-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:19px}
     .admin-tabs button{border:1px solid #3e4a63;background:#222b3e;color:#bfcbe0;text-align:center;min-height:45px}
     .admin-tabs button[aria-selected="true"]{background:#ef286c;color:white;border-color:#ef286c}
     .r-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin-top:15px}
@@ -42,7 +42,7 @@
     .r-audit{border-top:1px solid #35435b;font-size:13px;color:#bbc6d8;padding:9px 0;overflow-wrap:anywhere}
     #recNotice{white-space:pre-wrap;color:#ffbd69;font-size:13px;margin:14px 0}
     #recNotice.success{color:#42d69d}
-    @media(max-width:560px){.admin-tabs button{font-size:13px;padding:11px 6px}.r-fields{grid-template-columns:1fr}}
+    @media(max-width:560px){.admin-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-tabs button{font-size:13px;padding:11px 6px}.r-fields{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -63,6 +63,7 @@
         <button id="tabUsers" type="button" aria-selected="true">Người dùng &amp; PF Pro</button>
         <button id="tabRecovery" type="button" aria-selected="false">Đối soát SePay</button>
         <button id="tabUpdates" type="button" aria-selected="false">Cập nhật APK</button>
+        <button id="tabAnnouncements" type="button" aria-selected="false">📢 Thông báo</button>
       </nav>
       <section class="panel" id="userSection">
         <div class="toolbar">
@@ -107,6 +108,9 @@
       </section>
       <section id="updatesSection" hidden aria-label="Quản lý cập nhật APK">
         <iframe id="updatesFrame" title="PF Admin Center · Quản lý cập nhật APK" style="display:block;width:100%;height:900px;border:0;margin-top:18px" loading="lazy"></iframe>
+      </section>
+      <section id="announcementsSection" hidden aria-label="Quản lý thông báo">
+        <iframe id="announcementsFrame" title="PF Admin Center · Quản lý thông báo" style="display:block;width:100%;height:1100px;border:0;margin-top:18px" loading="lazy"></iframe>
       </section>
     </main>
     <div id="notice" role="status" aria-live="polite"></div>
@@ -400,33 +404,42 @@
         $('recSync').disabled = !recGranted;
       }
     }
-    let updateTabLoaded = false;
+    let updateTabLoaded = false, announcementsTabLoaded = false;
     function openAdminTab(name) {
-      const recovery = name === 'recovery', updates = name === 'updates';
-      $('userSection').hidden = recovery || updates;
+      const recovery = name === 'recovery', updates = name === 'updates', announcements = name === 'announcements';
+      $('userSection').hidden = recovery || updates || announcements;
       $('recoverySection').hidden = !recovery;
       $('updatesSection').hidden = !updates;
-      $('tabUsers').setAttribute('aria-selected',String(!recovery && !updates));
+      $('announcementsSection').hidden = !announcements;
+      $('tabUsers').setAttribute('aria-selected',String(!recovery && !updates && !announcements));
       $('tabRecovery').setAttribute('aria-selected',String(recovery));
       $('tabUpdates').setAttribute('aria-selected',String(updates));
+      $('tabAnnouncements').setAttribute('aria-selected',String(announcements));
       if (recovery && !recLoaded) recLoad();
       if (updates && !updateTabLoaded) {
         updateTabLoaded = true;
         $('updatesFrame').src = './updates.html';
       }
+      if (announcements && !announcementsTabLoaded) {
+        announcementsTabLoaded = true;
+        $('announcementsFrame').src = './announcements.html';
+      }
     }
-    $('updatesFrame').addEventListener('load', () => {
-      try {
-        const frame = $('updatesFrame'), doc = frame.contentDocument;
-        if (!doc?.body) return;
-        const resize = () => { frame.style.height = Math.max(900, doc.documentElement.scrollHeight + 24) + 'px'; };
-        resize();
-        new ResizeObserver(resize).observe(doc.body);
-      } catch { /* Iframe retains internal scrolling as fallback. */ }
-    });
+    for (const id of ['updatesFrame','announcementsFrame']) {
+      $(id).addEventListener('load', () => {
+        try {
+          const frame = $(id), doc = frame.contentDocument;
+          if (!doc?.body) return;
+          const resize = () => { frame.style.height = Math.max(id === 'updatesFrame' ? 900 : 1100, doc.documentElement.scrollHeight + 24) + 'px'; };
+          resize();
+          new ResizeObserver(resize).observe(doc.body);
+        } catch { /* Keep iframe scrolling if a browser blocks access. */ }
+      });
+    }
     $('tabUsers').addEventListener('click', () => openAdminTab('users'));
     $('tabRecovery').addEventListener('click', () => openAdminTab('recovery'));
     $('tabUpdates').addEventListener('click', () => openAdminTab('updates'));
+    $('tabAnnouncements').addEventListener('click', () => openAdminTab('announcements'));
     $('recRefresh').addEventListener('click', recLoad);
     $('recSync').addEventListener('click', async () => {
       if (recBusy || !recGranted) return;
@@ -468,6 +481,7 @@
         $('recWho').textContent = session.user.email || 'Google Admin';
         if (window.location.hash === '#recovery') openAdminTab('recovery');
         else if (window.location.hash === '#updates') openAdminTab('updates');
+        else if (window.location.hash === '#announcements') openAdminTab('announcements');
       }
     } catch (err) { setNotice('Lỗi xác thực: ' + err.message); }
   </script>
