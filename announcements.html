@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>PF Admin Center · Thông báo</title>
+<style>
+:root{color-scheme:dark;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:#0c101b;color:#f4f6fb}
+*{box-sizing:border-box}body{margin:0}.panel{background:#151a28;border:1px solid #2c3449;border-radius:16px;padding:16px;margin-bottom:15px}
+h1{font-size:22px;margin:0 0 7px}h2{font-size:17px;margin:0}p{color:#a3aec4;margin:6px 0 14px}
+label{display:grid;gap:5px;color:#c3cde0;font-size:13px}
+input,textarea,select{width:100%;min-width:0;background:#0f1522;color:#fff;border:1px solid #4b5468;border-radius:10px;font:inherit;padding:10px}
+textarea{resize:vertical;min-height:125px}input[type=checkbox]{width:auto;accent-color:#ef286c}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.wide{grid-column:1/-1}
+.row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin:13px 0 0}
+button{font:inherit;color:white;font-weight:700;border:0;border-radius:10px;background:#ef286c;padding:10px 13px;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:#34415a}.good{background:#197658}.danger{background:#93374b}
+#notice{white-space:pre-wrap;color:#ffbd69;font-size:13px;min-height:24px;margin:10px 0}
+#notice.ok{color:#42d69d}.item{background:#101726;border:1px solid #303c56;border-radius:12px;padding:14px;margin:10px 0;overflow-wrap:anywhere}
+.meta{font-size:12px;color:#b9c5d9}.pill{display:inline-block;background:#35415c;border-radius:7px;padding:2px 8px;margin-right:6px}
+.item h3{font-size:16px;margin:8px 0 3px}.item p{margin:5px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+a{color:#ff9abb}.hint{padding:11px;border:1px solid #5f5367;border-radius:9px;background:#282438;color:#e9d6e1;font-size:13px;margin:12px 0}
+@media(max-width:580px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.panel{padding:13px}button{font-size:13px}}
+</style></head><body>
+<section class="panel">
+ <div class="row"><h1>📢 Quản lý thông báo PF</h1><a href="https://pf-studio-8cz.pages.dev/news/" target="_blank" rel="noopener noreferrer">Xem bảng tin ↗</a></div>
+ <p>Đăng một lần, website hiển thị tự động. Ứng dụng Android sẽ nhận cùng dữ liệu sau bản tích hợp APK.</p>
+ <div class="hint">Mọi thông báo mới đều được lưu nháp trước. Chỉ bấm <b>Công bố</b> khi đã kiểm tra nội dung. Không nhập thông tin ngân hàng, mã bí mật hay mật khẩu vào thông báo.</div>
+ <div id="notice" role="status" aria-live="polite">Đang xác minh quyền Google Admin…</div>
+ <form id="editor" hidden>
+   <div class="grid">
+     <label class="wide">Tiêu đề <input id="title" maxlength="160" minlength="3" required placeholder="Ví dụ: PF Studio cập nhật phiên bản mới"></label>
+     <label>Danh mục <select id="category"><option value="news">Tin tức</option><option value="update">Cập nhật</option><option value="event">Sự kiện</option><option value="offer">Ưu đãi</option><option value="maintenance">Bảo trì</option></select></label>
+     <label>Thời điểm công bố (không bắt buộc) <input id="publishAt" type="datetime-local"></label>
+     <label>Hết hạn hiển thị (không bắt buộc) <input id="expiresAt" type="datetime-local"></label>
+     <label style="align-self:end;display:flex;align-items:center;gap:9px"><input id="pinned" type="checkbox"> Ghim lên đầu bảng tin</label>
+     <label class="wide">Nội dung <textarea id="body" minlength="1" maxlength="12000" required placeholder="Nội dung chính thức sẽ hiển thị trên website và APK."></textarea></label>
+   </div>
+   <div class="actions"><button id="save" type="submit">Lưu bản nháp</button><button id="publish" class="good" type="button" disabled>Công bố</button><button id="reset" class="secondary" type="button">Soạn thông báo mới</button></div>
+   <p class="meta" id="editing"></p>
+ </form>
+</section>
+<section class="panel">
+ <div class="row"><h2>Danh sách thông báo</h2><button id="refresh" class="secondary" type="button" disabled>Làm mới</button></div>
+ <div id="list" aria-live="polite"></div>
+</section>
+<script type="module">
+import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.58.0';
+const sb=createClient('https://xrxjwulrpfimpccjejbe.supabase.co','sb_publishable_J_RxUjYI3UNQyxDg8Sp3CA_CPFbvkEl',{auth:{flowType:'pkce',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+const $=id=>document.getElementById(id);
+const categories={news:'Tin tức',update:'Cập nhật',event:'Sự kiện',offer:'Ưu đãi',maintenance:'Bảo trì'};
+const statuses={draft:'Bản nháp',published:'Đã công bố',archived:'Đã lưu trữ'};
+let allowed=false,busy=false,editingId=null,rows=[],editStatus='draft',editPublishedAt=null;
+function notify(s,ok=false){$('notice').textContent=s;$('notice').classList.toggle('ok',ok);}
+function node(t,c,v){const e=document.createElement(t);if(c)e.className=c;if(v!==undefined)e.textContent=String(v);return e;}
+function localInput(iso){if(!iso)return '';const d=new Date(iso);if(Number.isNaN(+d))return '';const z=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'T'+z(d.getHours())+':'+z(d.getMinutes());}
+function dateTime(iso){return iso?new Date(iso).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}):'Chưa đặt lịch';}
+function isoOrNull(id){const v=$(id).value;if(!v)return null;const d=new Date(v);if(Number.isNaN(+d))throw Error('Thời gian không hợp lệ.');return d.toISOString();}
+function readForm(){
+ const title=$('title').value.trim(),body=$('body').value.trim(),published_at=isoOrNull('publishAt'),expires_at=isoOrNull('expiresAt');
+ if(title.length<3||title.length>160)throw Error('Tiêu đề phải từ 3 đến 160 ký tự.');
+ if(!body.length||body.length>12000)throw Error('Nội dung phải từ 1 đến 12.000 ký tự.');
+ if(expires_at&&new Date(expires_at)<=new Date(published_at||Date.now()))throw Error('Hạn hiển thị phải sau thời điểm công bố.');
+ return {title,body,category:$('category').value,pinned:$('pinned').checked,published_at,expires_at};
+}
+function busyMode(x){busy=x;$('save').disabled=x||!allowed;$('publish').disabled=x||!allowed||!editingId;$('reset').disabled=x||!allowed;$('refresh').disabled=x||!allowed;}
+async function ensureAccess(){
+ const {data:userInfo,error:uerr}=await sb.auth.getUser();
+ if(uerr||!userInfo?.user)throw Error('Chưa đăng nhập Google. Mở PF Admin Center và đăng nhập trước.');
+ const {data,error}=await sb.rpc('pf_is_app_admin');
+ if(error)throw Error('Không thể xác minh quyền Admin: '+error.message);
+ if(data!==true)throw Error('Tài khoản Google này không có quyền quản trị PF.');
+ return userInfo.user;
+}
+function resetForm(){
+ editingId=null;editStatus='draft';editPublishedAt=null;$('editor').reset();
+ $('save').textContent='Lưu bản nháp';$('editing').textContent='Thông báo mới: lưu nháp rồi mới công bố.';$('publish').disabled=true;
+}
+function editItem(r){
+ editingId=r.id;editStatus=r.status;editPublishedAt=r.published_at;
+ $('title').value=r.title;$('body').value=r.body;$('category').value=r.category;
+ $('pinned').checked=!!r.pinned;$('publishAt').value=localInput(r.published_at);
+ $('expiresAt').value=localInput(r.expires_at);
+ $('save').textContent='Lưu thay đổi';$('publish').disabled=r.status==='published';
+ $('editing').textContent='Đang sửa · '+(statuses[r.status]||r.status)+' · '+r.id;
+ window.scrollTo({top:0,behavior:'smooth'});
+}
+function render(){
+ const host=$('list');host.replaceChildren();
+ if(!rows.length){host.append(node('p','', 'Chưa có thông báo. Hãy tạo bản nháp đầu tiên.'));return;}
+ for(const r of rows){
+  const a=node('article','item');const meta=node('div','meta');
+  meta.append(node('span','pill',statuses[r.status]||r.status),node('span','pill',categories[r.category]||r.category));
+  if(r.pinned)meta.append(node('span','pill','📌 Ghim'));
+  a.append(meta,node('h3','',r.title),node('p','',r.body.length>220?r.body.slice(0,220)+'…':r.body));
+  a.append(node('div','meta','Công bố: '+dateTime(r.published_at)+(r.expires_at?' · Hết hạn: '+dateTime(r.expires_at):'')));
+  const actions=node('div','actions');const edit=node('button','secondary','Sửa');edit.type='button';edit.disabled=busy;
+  edit.onclick=()=>editItem(r);actions.append(edit);
+  if(r.status==='draft'||r.status==='archived'){
+    const pub=node('button','good','Công bố');pub.type='button';pub.disabled=busy;
+    pub.onclick=()=>publishItem(r.id);actions.append(pub);
+  }
+  if(r.status==='published'){
+    const archive=node('button','secondary','Lưu trữ');archive.type='button';archive.disabled=busy;
+    archive.onclick=()=>archiveItem(r.id);actions.append(archive);
+  }
+  const del=node('button','danger','Xóa');del.type='button';del.disabled=busy;del.onclick=()=>deleteItem(r.id);
+  actions.append(del);a.append(actions);host.append(a);
+ }
+}
+async function refresh(){
+ if(busy)return;busyMode(true);
+ try{
+  const {data,error}=await sb.from('pf_announcements').select('id,title,body,category,status,pinned,published_at,expires_at,created_at,updated_at').order('created_at',{ascending:false}).limit(150);
+  if(error)throw error;rows=data||[];render();notify('Đã tải '+rows.length+' thông báo.',true);
+ }catch(e){notify('Không tải được thông báo: '+e.message);}
+ finally{busyMode(false);}
+}
+async function save(e){
+ e.preventDefault();if(busy)return;
+ let patch;try{patch=readForm();}catch(err){notify(err.message);return;}
+ busyMode(true);
+ try{
+  let q;
+  if(editingId){
+   const record={...patch,status:editStatus};
+   if(editStatus==='published'&&!record.published_at)record.published_at=editPublishedAt||new Date().toISOString();
+   q=sb.from('pf_announcements').update(record).eq('id',editingId).select('id,status').single();
+  }else{
+   q=sb.from('pf_announcements').insert({...patch,status:'draft'}).select('id,status').single();
+  }
+  const {data,error}=await q;if(error)throw error;
+  editingId=data.id;editStatus=data.status;$('save').textContent='Lưu thay đổi';
+  $('publish').disabled=editStatus==='published';notify('Đã lưu '+(editStatus==='draft'?'bản nháp':'thông báo')+'.',true);
+ }catch(err){notify('Không thể lưu: '+err.message);}finally{busyMode(false);}
+ await refresh();
+}
+async function publishItem(id){
+ if(busy)return;const r=rows.find(x=>x.id===id);
+ if(!r){notify('Không tìm thấy thông báo, hãy tải lại.');return;}
+ if(!confirm('Công bố thông báo "'+r.title+'"? Thông báo sẽ hiển thị công khai theo lịch đã đặt.'))return;
+ busyMode(true);
+ try{
+  const when=r.published_at&&new Date(r.published_at)>new Date()?r.published_at:new Date().toISOString();
+  if(r.expires_at&&new Date(r.expires_at)<=new Date(when))throw Error('Thông báo đã quá hạn hiển thị.');
+  const {data,error}=await sb.from('pf_announcements').update({status:'published',published_at:when}).eq('id',id).select('id').single();
+  if(error)throw error;if(!data)throw Error('Không có dữ liệu cập nhật.');
+  if(editingId===id)resetForm();notify('Đã công bố thông báo.',true);
+ }catch(err){notify('Công bố thất bại: '+err.message);}finally{busyMode(false);}
+ await refresh();
+}
+async function archiveItem(id){
+ if(busy||!confirm('Ẩn thông báo đã công bố khỏi website?'))return;
+ busyMode(true);
+ try{const {error}=await sb.from('pf_announcements').update({status:'archived'}).eq('id',id);if(error)throw error;if(editingId===id)resetForm();notify('Đã lưu trữ thông báo.',true);}
+ catch(e){notify('Không thể lưu trữ: '+e.message);}finally{busyMode(false);}
+ await refresh();
+}
+async function deleteItem(id){
+ if(busy||!confirm('XÓA VĨNH VIỄN thông báo này? Không thể hoàn tác.'))return;
+ busyMode(true);
+ try{const {error}=await sb.from('pf_announcements').delete().eq('id',id);if(error)throw error;if(editingId===id)resetForm();notify('Đã xóa thông báo.',true);}
+ catch(e){notify('Không thể xóa: '+e.message);}finally{busyMode(false);}
+ await refresh();
+}
+$('editor').addEventListener('submit',save);
+$('reset').addEventListener('click',()=>{resetForm();notify('Đang soạn thông báo mới.',true)});
+$('publish').addEventListener('click',async()=>{
+ if(!editingId||busy)return;
+ // Save form first, then publish the exact committed record.
+ let patch;try{patch=readForm();}catch(e){notify(e.message);return;}
+ busyMode(true);
+ try{
+  const {data,error}=await sb.from('pf_announcements').update({...patch,status:editStatus}).eq('id',editingId).select('id').single();
+  if(error)throw error;if(!data)throw Error('Không lưu được nội dung mới.');
+ }catch(e){notify('Chưa công bố: '+e.message);busyMode(false);return;}
+ busyMode(false);await refresh();await publishItem(editingId);
+});
+$('refresh').addEventListener('click',refresh);
+try{
+ await ensureAccess();allowed=true;$('editor').hidden=false;
+ resetForm();notify('Đã xác minh quyền Admin. Sẵn sàng quản lý thông báo.',true);await refresh();
+}catch(err){allowed=false;$('editor').hidden=true;notify(err.message);}
+</script></body></html>
