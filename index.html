@@ -26,8 +26,8 @@
     [hidden]{display:none!important}
     @media(max-width:560px){.page{padding:12px 12px 35px}.login{margin:40px auto 0}.toolbar{align-items:flex-start}.cards{grid-template-columns:1fr}.search{flex-wrap:wrap}.search input{flex-basis:100%}.search button{flex:1}}
 
-    /* Unified PF Admin Center: two views on one public URL */
-    .admin-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:19px}
+    /* PF Admin Center: three views on one URL */
+    .admin-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:19px}
     .admin-tabs button{border:1px solid #3e4a63;background:#222b3e;color:#bfcbe0;text-align:center;min-height:45px}
     .admin-tabs button[aria-selected="true"]{background:#ef286c;color:white;border-color:#ef286c}
     .r-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin-top:15px}
@@ -62,6 +62,7 @@
       <nav class="admin-tabs" aria-label="Các mục quản trị">
         <button id="tabUsers" type="button" aria-selected="true">Người dùng &amp; PF Pro</button>
         <button id="tabRecovery" type="button" aria-selected="false">Đối soát SePay</button>
+        <button id="tabUpdates" type="button" aria-selected="false">Cập nhật APK</button>
       </nav>
       <section class="panel" id="userSection">
         <div class="toolbar">
@@ -103,6 +104,9 @@
         </section>
         <section class="panel"><h2>Hồ sơ cần đối soát</h2><div id="recCases" class="r-cases"></div></section>
         <section class="panel"><h2>Nhật ký xử lý</h2><div id="recAudit"></div></section>
+      </section>
+      <section id="updatesSection" hidden aria-label="Quản lý cập nhật APK">
+        <iframe id="updatesFrame" title="PF Admin Center · Quản lý cập nhật APK" style="display:block;width:100%;height:900px;border:0;margin-top:18px" loading="lazy"></iframe>
       </section>
     </main>
     <div id="notice" role="status" aria-live="polite"></div>
@@ -396,16 +400,33 @@
         $('recSync').disabled = !recGranted;
       }
     }
+    let updateTabLoaded = false;
     function openAdminTab(name) {
-      const recovery = name === 'recovery';
-      $('userSection').hidden = recovery;
+      const recovery = name === 'recovery', updates = name === 'updates';
+      $('userSection').hidden = recovery || updates;
       $('recoverySection').hidden = !recovery;
-      $('tabUsers').setAttribute('aria-selected',String(!recovery));
+      $('updatesSection').hidden = !updates;
+      $('tabUsers').setAttribute('aria-selected',String(!recovery && !updates));
       $('tabRecovery').setAttribute('aria-selected',String(recovery));
+      $('tabUpdates').setAttribute('aria-selected',String(updates));
       if (recovery && !recLoaded) recLoad();
+      if (updates && !updateTabLoaded) {
+        updateTabLoaded = true;
+        $('updatesFrame').src = './updates.html';
+      }
     }
+    $('updatesFrame').addEventListener('load', () => {
+      try {
+        const frame = $('updatesFrame'), doc = frame.contentDocument;
+        if (!doc?.body) return;
+        const resize = () => { frame.style.height = Math.max(900, doc.documentElement.scrollHeight + 24) + 'px'; };
+        resize();
+        new ResizeObserver(resize).observe(doc.body);
+      } catch { /* Iframe retains internal scrolling as fallback. */ }
+    });
     $('tabUsers').addEventListener('click', () => openAdminTab('users'));
     $('tabRecovery').addEventListener('click', () => openAdminTab('recovery'));
+    $('tabUpdates').addEventListener('click', () => openAdminTab('updates'));
     $('recRefresh').addEventListener('click', recLoad);
     $('recSync').addEventListener('click', async () => {
       if (recBusy || !recGranted) return;
@@ -446,6 +467,7 @@
         await refresh();
         $('recWho').textContent = session.user.email || 'Google Admin';
         if (window.location.hash === '#recovery') openAdminTab('recovery');
+        else if (window.location.hash === '#updates') openAdminTab('updates');
       }
     } catch (err) { setNotice('Lỗi xác thực: ' + err.message); }
   </script>
