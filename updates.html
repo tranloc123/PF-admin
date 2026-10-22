@@ -46,13 +46,28 @@ const explain=s=>({
  invalid_apk_container:'File không phải APK/ZIP hợp lệ.',
  release_version_exists:'Phiên bản này đã tồn tại.',
  release_downgrade_blocked:'Không thể phát hành phiên bản cũ hơn.',
- release_not_draft:'Bản này không còn là nháp.'
+ release_not_draft:'Bản này không còn là nháp.',
+ admin_lookup_failed:'Máy chủ chưa kiểm tra được quyền Google Admin.',
+ google_login_required:'Phiên Google đã hết hạn. Hãy đăng nhập lại tại PF Admin Center.',
+ login_required:'Hãy đăng nhập Google trước khi quản lý APK.',
+ release_channel_mismatch:'APK QA/Beta không được đăng lên kênh Stable. Hãy chọn QA.'
 }[s]||s||'Lỗi không xác định');
 const size=x=>(x/1048576).toFixed(2)+' MB';
 let busy=false,allowed=false,list=[];
 async function api(body){
  const {data,error}=await sb.functions.invoke('pf-update-admin',{body});
- if(error)throw Error(explain(data?.error||'Lỗi kết nối API cập nhật.'));
+ if(error){
+  let details=null;
+  const response=error.context;
+  if(response?.json){try{details=await response.clone().json();}catch{}}
+  const status=response?.status;
+  const issue=details?.error||data?.error;
+  if(status===401 && !issue)throw Error('Phiên đăng nhập Google không hợp lệ (HTTP 401). Đăng nhập lại Admin Center.');
+  if(status===403 && !issue)throw Error('Tài khoản chưa được cấp quyền (HTTP 403).');
+  if(status===404)throw Error('Không tìm thấy API pf-update-admin (HTTP 404).');
+  if(issue)throw Error(explain(issue)+' (HTTP '+(status||'?')+').');
+  throw Error('API cập nhật thất bại'+(status?' (HTTP '+status+')':' (lỗi mạng/CORS)')+'.');
+ }
  if(!data?.ok)throw Error(explain(data?.error));
  return data.data;
 }
@@ -101,6 +116,10 @@ $('file').onchange=()=>{
  const f=$('file').files?.[0];
  if(!f){$('upload').disabled=true;return;}
  const ok=/\.apk$/i.test(f.name)&&f.size>=10000&&f.size<=50*1024*1024;
+ if(/(?:^|[^a-z])(?:qa|beta|test)(?:[^a-z]|$)/i.test(f.name)&&$('channel').value==='stable'){
+  $('channel').value='qa';
+  show('Nhận diện APK beta/QA: tự chuyển kênh thành QA để tránh phát hành nhầm.',true);
+ }
  $('upload').disabled=!ok||!allowed;
  if(!ok)return show('Chỉ chọn .apk có dung lượng 10 KB đến 50 MB.');
  const m=f.name.match(/(?:^|[^a-z0-9])v(\d{2,6})(?=[^0-9]|$)/i);
@@ -113,6 +132,7 @@ $('upload').onclick=async()=>{
  const f=$('file').files?.[0],c=Number($('code').value),n=$('name').value.trim(),notes=$('notes').value.trim(),channel=$('channel').value;
  if(!f||!/\.apk$/i.test(f.name)||f.size<10000||f.size>50*1024*1024)return show('Chọn APK dưới 50 MB.');
  if(!Number.isInteger(c)||c<1||c>2147483647||!/^[a-zA-Z0-9._-]{1,40}$/.test(n))return show('Sai versionCode hoặc versionName.');
+ if(channel==='stable' && /(?:^|[-_.])(qa|beta|test|sandbox)(?:$|[-_.])/i.test(n+'-'+f.name))return show('APK Beta/QA phải công bố ở kênh QA, không phải Stable.');
  if(list.some(r=>r.channel===channel&&r.version_code===c))return show('Mã phiên bản đã tồn tại trong kênh này.');
  if(!confirm('Upload '+f.name+' vào kênh '+channel+' dưới dạng NHÁP? Bạn xác nhận đúng mã phiên bản và chữ ký APK.'))return;
  busy=true;$('upload').disabled=true;
@@ -133,6 +153,13 @@ $('upload').onclick=async()=>{
  await refresh();
 };
 $('refresh').onclick=refresh;
+$('channel').addEventListener('change',()=>{
+ const file=$('file').files?.[0];
+ if($('channel').value==='stable' && file && /(?:^|[^a-z])(?:qa|beta|test)(?:[^a-z]|$)/i.test(file.name)){
+  $('upload').disabled=true;
+  show('Bạn đang chọn Stable nhưng APK là Beta/QA. Vui lòng đổi kênh sang QA.');
+ } else $('upload').disabled=!allowed||!file;
+});
 const session=await sb.auth.getSession();
 if(session.error||!session.data?.session)show('Hãy đăng nhập Google tại PF Admin Center rồi mở lại tab Cập nhật APK.');
 else await refresh();
