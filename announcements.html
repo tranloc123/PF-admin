@@ -36,7 +36,7 @@ a{color:#ff9abb}.hint{padding:11px;border:1px solid #5f5367;border-radius:9px;ba
      <label style="align-self:end;display:flex;align-items:center;gap:9px"><input id="pinned" type="checkbox"> Ghim lên đầu bảng tin</label>
      <label class="wide">Nội dung <textarea id="body" minlength="1" maxlength="12000" required placeholder="Nội dung chính thức sẽ hiển thị trên website và APK."></textarea></label>
    </div>
-   <div class="actions"><button id="save" type="submit">Lưu bản nháp</button><button id="publish" class="good" type="button" disabled>Công bố</button><button id="reset" class="secondary" type="button">Soạn thông báo mới</button></div>
+   <div class="actions"><button id="save" type="submit">Lưu bản nháp</button><button id="publish" class="good" type="button" disabled>Công bố</button><button id="newNotice" class="secondary" type="button">Soạn thông báo mới</button></div>
    <p class="meta" id="editing"></p>
  </form>
 </section>
@@ -63,7 +63,7 @@ function readForm(){
  if(expires_at&&new Date(expires_at)<=new Date(published_at||Date.now()))throw Error('Hạn hiển thị phải sau thời điểm công bố.');
  return {title,body,category:$('category').value,pinned:$('pinned').checked,published_at,expires_at};
 }
-function busyMode(x){busy=x;$('save').disabled=x||!allowed;$('publish').disabled=x||!allowed||!editingId;$('reset').disabled=x||!allowed;$('refresh').disabled=x||!allowed;}
+function busyMode(x){busy=x;$('save').disabled=x||!allowed;$('publish').disabled=x||!allowed||!editingId;$('newNotice').disabled=x||!allowed;$('refresh').disabled=x||!allowed;}
 async function ensureAccess(){
  const {data:userInfo,error:uerr}=await sb.auth.getUser();
  if(uerr||!userInfo?.user)throw Error('Chưa đăng nhập Google. Mở PF Admin Center và đăng nhập trước.');
@@ -164,7 +164,7 @@ async function deleteItem(id){
  await refresh();
 }
 $('editor').addEventListener('submit',save);
-$('reset').addEventListener('click',()=>{resetForm();notify('Đang soạn thông báo mới.',true)});
+$('newNotice').addEventListener('click',()=>{resetForm();notify('Đang soạn thông báo mới.',true)});
 $('publish').addEventListener('click',async()=>{
  if(!editingId||busy)return;
  // Save form first, then publish the exact committed record.
