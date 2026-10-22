@@ -1,0 +1,139 @@
+<!doctype html><html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>PF Admin Center · Quản lý APK</title>
+<style>
+:root{color-scheme:dark;font:15px/1.5 system-ui,"Segoe UI",sans-serif;color:#f4f6fb;background:#0c101b}
+*{box-sizing:border-box}body{margin:0}.panel{background:#151a28;border:1px solid #2c3449;border-radius:16px;margin:0 0 15px;padding:16px}
+h1{font-size:22px;margin:0 0 8px}h2{font-size:16px}p,.muted{color:#a3aec4}p{margin:7px 0 14px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+label{display:grid;gap:4px;font-size:13px;color:#c0cbe0}label.wide{grid-column:1/-1}
+input,textarea,select{background:#0f1522;color:#f4f6fb;border:1px solid #4b5468;border-radius:10px;padding:11px;font:inherit;min-width:0;width:100%}
+textarea{min-height:86px;resize:vertical}button{font:inherit;color:#fff;font-weight:700;background:#ef286c;padding:11px 13px;border:0;border-radius:10px;cursor:pointer}
+button:disabled{opacity:.4;cursor:default}.secondary{background:#354059}.good{background:#1b7958}.danger{background:#94344b}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:13px}.release{border:1px solid #34435a;background:#101726;border-radius:13px;padding:14px;margin-top:10px;overflow-wrap:anywhere}
+.notice{border:1px solid #735a72;background:#2e2237;border-radius:10px;color:#f6c4db;padding:11px;font-size:13px;margin:12px 0}
+#status{white-space:pre-wrap;color:#ffbd69;margin:12px 0;font-size:13px}#status.ok{color:#42d69d}
+a{color:#ff9abb}@media(max-width:550px){.grid{grid-template-columns:1fr}.panel{padding:13px}}
+</style></head><body>
+<section class="panel">
+<h1>Quản lý cập nhật APK</h1>
+<p>Upload bản đã ký lên Supabase và công bố từ PF Admin Center.</p>
+<div class="notice"><strong>Upload chỉ tạo bản nháp.</strong> Cần bấm Công bố để người dùng nhìn thấy phiên bản mới. APK phải đúng package và chứng chỉ ký của kênh QA hoặc Stable.</div>
+<div id="status" role="status" aria-live="polite">Đang xác thực Google Admin...</div>
+<div class="grid">
+<label class="wide">Chọn APK đã ký (tối đa 50 MB)<input type="file" accept=".apk" id="file"></label>
+<label>Kênh<select id="channel"><option value="qa">QA · PF Studio đang kiểm thử</option><option value="stable">Stable · Bản chính thức</option></select></label>
+<label>versionCode<input id="code" type="number" min="1" max="2147483647" step="1" inputmode="numeric" placeholder="94"></label>
+<label class="wide">versionName<input id="name" maxlength="40" placeholder="0.7.6.8"></label>
+<label class="wide">Ghi chú cập nhật<textarea id="notes" maxlength="500" placeholder="Các thay đổi trong phiên bản này..."></textarea></label>
+</div>
+<div class="actions"><button type="button" id="upload" disabled>Upload APK và lưu nháp</button><button id="refresh" class="secondary" disabled>Làm mới</button></div>
+<p class="muted" style="font-size:12px">Kiểm tra đúng versionCode của APK trước khi tải. Máy chủ kiểm tra SHA-256 và dung lượng; ứng dụng Android kiểm tra chữ ký, package và phiên bản trước khi cài.</p>
+</section>
+<section class="panel"><h2>Các bản cập nhật</h2><div id="releases"></div></section>
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
+const sb=createClient('https://xrxjwulrpfimpccjejbe.supabase.co','sb_publishable_J_RxUjYI3UNQyxDg8Sp3CA_CPFbvkEl',{auth:{flowType:'pkce',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+const $=id=>document.getElementById(id);
+const show=(s,ok=false)=>{$('status').textContent=s;$('status').classList.toggle('ok',ok);};
+const make=(tag,cls,s)=>{const e=document.createElement(tag);e.className=cls;e.textContent=String(s);return e;};
+const explain=s=>({
+ admin_access_denied:'Tài khoản không có quyền Admin.',
+ apk_not_uploaded:'Không thấy APK vừa upload trên Storage.',
+ file_hash_mismatch:'SHA-256 trên Storage không khớp.',
+ file_size_mismatch:'Dung lượng APK không khớp.',
+ invalid_apk_container:'File không phải APK/ZIP hợp lệ.',
+ release_version_exists:'Phiên bản này đã tồn tại.',
+ release_downgrade_blocked:'Không thể phát hành phiên bản cũ hơn.',
+ release_not_draft:'Bản này không còn là nháp.'
+}[s]||s||'Lỗi không xác định');
+const size=x=>(x/1048576).toFixed(2)+' MB';
+let busy=false,allowed=false,list=[];
+async function api(body){
+ const {data,error}=await sb.functions.invoke('pf-update-admin',{body});
+ if(error)throw Error(explain(data?.error||'Lỗi kết nối API cập nhật.'));
+ if(!data?.ok)throw Error(explain(data?.error));
+ return data.data;
+}
+async function refresh(){
+ if(busy)return;
+ busy=true;$('refresh').disabled=true;
+ try{
+  list=await api({action:'list'});allowed=true;
+  const host=$('releases');host.replaceChildren();
+  if(!list.length)host.append(make('p','muted','Chưa có bản cập nhật nào.'));
+  for(const r of list){
+   const card=make('article','release','');
+   const label=make('div','',r.version_name+' · '+String(r.channel).toUpperCase()+' · #'+r.version_code);
+   label.style.fontWeight='750';card.append(label);
+   card.append(make('div','muted',r.status==='published'?'Đã công bố':r.status==='draft'?'Bản nháp':'Tạm ngừng'));
+   card.append(make('div','muted',size(r.file_size_bytes)+' · SHA-256 '+String(r.sha256).slice(0,16)+'…'));
+   if(r.release_notes)card.append(make('p','muted',r.release_notes));
+   const actions=make('div','actions','');
+   if(r.status==='draft'){
+    const b=make('button','good','Công bố');
+    b.onclick=()=>{if(confirm('CÔNG BỐ '+r.version_name+' cho 100% kênh '+r.channel+'? Chỉ công bố file đúng package và chữ ký.'))change('publish',r.id);};
+    actions.append(b);
+   }
+   if(r.status==='published'){
+    const b=make('button','danger','Tạm ngừng');
+    b.onclick=()=>{if(confirm('Tạm ngừng '+r.version_name+'?'))change('suspend',r.id);};
+    actions.append(b);
+   }
+   if(r.status!=='draft'){
+    const a=make('a','muted','Mở file APK');a.href=r.apk_url;a.target='_blank';a.rel='noopener noreferrer';actions.append(a);
+   }
+   card.append(actions);host.append(card);
+  }
+  show('Đã tải '+list.length+' bản phát hành.',true);
+ }catch(e){allowed=false;$('releases').replaceChildren();show(e.message);}
+ finally{busy=false;$('refresh').disabled=false;$('upload').disabled=!allowed||!$('file').files?.length;}
+}
+async function change(action,id){
+ if(busy)return;busy=true;
+ try{const r=await api({action,id});show('Đã '+(action==='publish'?'công bố':'tạm ngừng')+' mã '+r.version_code+'.',true);}
+ catch(e){show('Không thể thay đổi: '+e.message);}
+ finally{busy=false;}
+ await refresh();
+}
+$('file').onchange=()=>{
+ const f=$('file').files?.[0];
+ if(!f){$('upload').disabled=true;return;}
+ const ok=/\.apk$/i.test(f.name)&&f.size>=10000&&f.size<=50*1024*1024;
+ $('upload').disabled=!ok||!allowed;
+ if(!ok)return show('Chỉ chọn .apk có dung lượng 10 KB đến 50 MB.');
+ const m=f.name.match(/(?:^|[^a-z0-9])v(\d{2,6})(?=[^0-9]|$)/i);
+ if(m&&!$('code').value)$('code').value=String(Number(m[1]));
+ if(!$('name').value)$('name').value='v'+($('code').value||'');
+ show('Đã chọn '+f.name+' · '+size(f.size)+'. Chưa upload.',true);
+};
+$('upload').onclick=async()=>{
+ if(busy||!allowed)return;
+ const f=$('file').files?.[0],c=Number($('code').value),n=$('name').value.trim(),notes=$('notes').value.trim(),channel=$('channel').value;
+ if(!f||!/\.apk$/i.test(f.name)||f.size<10000||f.size>50*1024*1024)return show('Chọn APK dưới 50 MB.');
+ if(!Number.isInteger(c)||c<1||c>2147483647||!/^[a-zA-Z0-9._-]{1,40}$/.test(n))return show('Sai versionCode hoặc versionName.');
+ if(list.some(r=>r.channel===channel&&r.version_code===c))return show('Mã phiên bản đã tồn tại trong kênh này.');
+ if(!confirm('Upload '+f.name+' vào kênh '+channel+' dưới dạng NHÁP? Bạn xác nhận đúng mã phiên bản và chữ ký APK.'))return;
+ busy=true;$('upload').disabled=true;
+ try{
+  show('Đang tính SHA-256...');
+  const buffer=await f.arrayBuffer(),d=await crypto.subtle.digest('SHA-256',buffer);
+  const hash=Array.from(new Uint8Array(d),v=>v.toString(16).padStart(2,'0')).join('');
+  const path=channel+'/pf-studio-v'+c+'-'+hash.slice(0,16)+'.apk';
+  show('Đang tải lên Supabase '+size(f.size)+'...');
+  const {error}=await sb.storage.from('pf-studio-updates').upload(path,f,{upsert:false,cacheControl:'3600',contentType:'application/vnd.android.package-archive'});
+  if(error)throw Error('Storage: '+error.message);
+  show('Đang kiểm tra trên máy chủ và ghi bản nháp...');
+  const r=await api({action:'stage',channel,version_code:c,version_name:n,release_notes:notes,sha256:hash,file_size_bytes:f.size});
+  $('file').value='';
+  show('Đã lưu NHÁP phiên bản '+r.version_code+'.',true);
+ }catch(e){show('Chưa hoàn thành: '+e.message);}
+ finally{busy=false;}
+ await refresh();
+};
+$('refresh').onclick=refresh;
+const session=await sb.auth.getSession();
+if(session.error||!session.data?.session)show('Hãy đăng nhập Google tại PF Admin Center rồi mở lại tab Cập nhật APK.');
+else await refresh();
+</script></body></html>
