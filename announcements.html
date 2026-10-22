@@ -73,7 +73,7 @@ async function ensureAccess(){
  return userInfo.user;
 }
 function resetForm(){
- editingId=null;editStatus='draft';editPublishedAt=null;$('editor').reset();
+ editingId=null;editStatus='draft';editPublishedAt=null;HTMLFormElement.prototype.reset.call($('editor'));
  $('save').textContent='Lưu bản nháp';$('editing').textContent='Thông báo mới: lưu nháp rồi mới công bố.';$('publish').disabled=true;
 }
 function editItem(r){
