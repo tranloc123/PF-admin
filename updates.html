@@ -129,7 +129,8 @@ $('file').onchange=()=>{
 };
 $('upload').onclick=async()=>{
  if(busy||!allowed)return;
- const f=$('file').files?.[0],c=Number($('code').value),n=$('name').value.trim(),notes=$('notes').value.trim(),channel=$('channel').value;
+ const f=$('file').files?.[0],c=Number($('code').value),n=$('name').value.trim().replace(/\.+$/,''),notes=$('notes').value.trim(),channel=$('channel').value;
+ $('name').value=n; // Trim accidental trailing punctuation; Android versionName must match release metadata.
  if(!f||!/\.apk$/i.test(f.name)||f.size<10000||f.size>50*1024*1024)return show('Chọn APK dưới 50 MB.');
  if(!Number.isInteger(c)||c<1||c>2147483647||!/^[a-zA-Z0-9._-]{1,40}$/.test(n))return show('Sai versionCode hoặc versionName.');
  if(channel==='stable' && /(?:^|[-_.])(qa|beta|test|sandbox)(?:$|[-_.])/i.test(n+'-'+f.name))return show('APK Beta/QA phải công bố ở kênh QA, không phải Stable.');
