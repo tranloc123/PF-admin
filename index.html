@@ -27,7 +27,7 @@
     @media(max-width:560px){.page{padding:12px 12px 35px}.login{margin:40px auto 0}.toolbar{align-items:flex-start}.cards{grid-template-columns:1fr}.search{flex-wrap:wrap}.search input{flex-basis:100%}.search button{flex:1}}
 
     /* PF Admin Center: four views on one URL */
-    .admin-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:19px}
+    .admin-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-top:19px}
     .admin-tabs button{border:1px solid #3e4a63;background:#222b3e;color:#bfcbe0;text-align:center;min-height:45px}
     .admin-tabs button[aria-selected="true"]{background:#ef286c;color:white;border-color:#ef286c}
     .r-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin-top:15px}
@@ -64,6 +64,7 @@
         <button id="tabRecovery" type="button" aria-selected="false">Đối soát SePay</button>
         <button id="tabUpdates" type="button" aria-selected="false">Cập nhật APK</button>
         <button id="tabAnnouncements" type="button" aria-selected="false">📢 Thông báo</button>
+        <button id="tabKeys" type="button" aria-selected="false">🔑 Key Game</button>
       </nav>
       <section class="panel" id="userSection">
         <div class="toolbar">
@@ -111,6 +112,9 @@
       </section>
       <section id="announcementsSection" hidden aria-label="Quản lý thông báo">
         <iframe id="announcementsFrame" title="PF Admin Center · Quản lý thông báo" style="display:block;width:100%;height:1100px;border:0;margin-top:18px" loading="lazy"></iframe>
+      </section>
+      <section id="keysSection" hidden aria-label="Quản lý Key Kingdom Clash">
+        <iframe id="keysFrame" title="PF Admin Center · Key Kingdom Clash" style="display:block;width:100%;height:1150px;border:0;margin-top:18px" loading="lazy"></iframe>
       </section>
     </main>
     <div id="notice" role="status" aria-live="polite"></div>
@@ -404,17 +408,19 @@
         $('recSync').disabled = !recGranted;
       }
     }
-    let updateTabLoaded = false, announcementsTabLoaded = false;
+    let updateTabLoaded = false, announcementsTabLoaded = false, keysTabLoaded = false;
     function openAdminTab(name) {
-      const recovery = name === 'recovery', updates = name === 'updates', announcements = name === 'announcements';
-      $('userSection').hidden = recovery || updates || announcements;
+      const recovery = name === 'recovery', updates = name === 'updates', announcements = name === 'announcements', keys = name === 'keys';
+      $('userSection').hidden = recovery || updates || announcements || keys;
       $('recoverySection').hidden = !recovery;
       $('updatesSection').hidden = !updates;
       $('announcementsSection').hidden = !announcements;
-      $('tabUsers').setAttribute('aria-selected',String(!recovery && !updates && !announcements));
+      $('keysSection').hidden = !keys;
+      $('tabUsers').setAttribute('aria-selected',String(!recovery && !updates && !announcements && !keys));
       $('tabRecovery').setAttribute('aria-selected',String(recovery));
       $('tabUpdates').setAttribute('aria-selected',String(updates));
       $('tabAnnouncements').setAttribute('aria-selected',String(announcements));
+      $('tabKeys').setAttribute('aria-selected',String(keys));
       if (recovery && !recLoaded) recLoad();
       if (updates && !updateTabLoaded) {
         updateTabLoaded = true;
@@ -424,13 +430,17 @@
         announcementsTabLoaded = true;
         $('announcementsFrame').src = './announcements-v102.html?v=20261022-2';
       }
+      if (keys && !keysTabLoaded) {
+        keysTabLoaded = true;
+        $('keysFrame').src = './kingdom-keys.html?v=20261023-1';
+      }
     }
-    for (const id of ['updatesFrame','announcementsFrame']) {
+    for (const id of ['updatesFrame','announcementsFrame','keysFrame']) {
       $(id).addEventListener('load', () => {
         try {
           const frame = $(id), doc = frame.contentDocument;
           if (!doc?.body) return;
-          const resize = () => { frame.style.height = Math.max(id === 'updatesFrame' ? 900 : 1100, doc.documentElement.scrollHeight + 24) + 'px'; };
+          const resize = () => { frame.style.height = Math.max(id === 'updatesFrame' ? 900 : id === 'keysFrame' ? 1150 : 1100, doc.documentElement.scrollHeight + 24) + 'px'; };
           resize();
           new ResizeObserver(resize).observe(doc.body);
         } catch { /* Keep iframe scrolling if a browser blocks access. */ }
@@ -440,6 +450,7 @@
     $('tabRecovery').addEventListener('click', () => openAdminTab('recovery'));
     $('tabUpdates').addEventListener('click', () => openAdminTab('updates'));
     $('tabAnnouncements').addEventListener('click', () => openAdminTab('announcements'));
+    $('tabKeys').addEventListener('click', () => openAdminTab('keys'));
     $('recRefresh').addEventListener('click', recLoad);
     $('recSync').addEventListener('click', async () => {
       if (recBusy || !recGranted) return;
@@ -482,6 +493,7 @@
         if (window.location.hash === '#recovery') openAdminTab('recovery');
         else if (window.location.hash === '#updates') openAdminTab('updates');
         else if (window.location.hash === '#announcements') openAdminTab('announcements');
+        else if (window.location.hash === '#keys') openAdminTab('keys');
       }
     } catch (err) { setNotice('Lỗi xác thực: ' + err.message); }
   </script>
